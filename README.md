@@ -29,7 +29,7 @@ bunx cfgdex
 
 ## what it does
 
-- all 275 keys in the current Codex `config.toml` reference
+- the current Codex `config.toml` surface, parsed from its JSON Schema
 - search across keys, labels, and descriptions
 - grouped views for model behavior, approvals, shell, tools, agents, features, providers, TUI, telemetry, and advanced permissions
 - toggles for booleans, selects for enums, and TOML-friendly editors for arrays, tables, maps, and paths
@@ -53,7 +53,7 @@ cfgdex only exports the values you changed. nested keys with placeholder ids are
 
 cfgdex is mostly a calm editor over the official Codex configuration surface:
 
-- the catalog lives in `app/config-options.ts`
+- the schema parser lives in `app/config-options.ts`
 - the catalog is parsed from the Codex JSON Schema, fetched at startup with a bundled fallback
 - the Vite entrypoint lives in `src/main.tsx`
 - the UI lives in `app/page.tsx`
