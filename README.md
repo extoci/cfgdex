@@ -12,16 +12,16 @@ run it directly:
 bunx cfgdex
 ```
 
-cfgdex starts a local server at:
+cfgdex starts a local server at a quiet, unprivileged local port and prints the URL:
 
 ```text
-https://cfgdex.localhost
+http://cfgdex.localhost:<port>
 ```
 
-it uses [portless](https://portless.sh/) for the named local URL. if your machine cannot bind the standard local HTTPS port, run the bundled development script with an unprivileged port:
+it uses [portless](https://portless.sh/) for the named local URL, but does not ask for sudo or modify `/etc/hosts`. `.localhost` names resolve locally in modern browsers. the port is intentional: binding the clean `http://cfgdex.localhost` or `https://cfgdex.localhost` URL requires a system-level service on port 80 or 443.
 
 ```sh
-PORTLESS_PORT=1355 PORTLESS_HTTPS=0 npm run dev:named
+npm run dev:named
 ```
 
 ## what it does
