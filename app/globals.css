@@ -14,8 +14,8 @@
   --orange-soft: #fff5e8;
   --shadow-sm: 0 1px 2px rgba(23, 23, 23, 0.04);
   --shadow-md: 0 8px 28px rgba(23, 23, 23, 0.06);
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 * {
@@ -477,7 +477,6 @@ textarea:focus-visible {
 
 .status-loading {
   background: #c4a25b;
-  animation: status-pulse 1.2s ease-in-out infinite;
 }
 
 .schema-status p {
@@ -812,7 +811,7 @@ kbd {
   align-items: center;
   margin-top: 19px;
   padding: 14px 16px;
-  background: linear-gradient(100deg, #eef8f4, #fbfdfc);
+  background: #f1f8f5;
   border: 1px solid #d8eee6;
   border-radius: 9px;
 }
@@ -825,12 +824,10 @@ kbd {
 }
 
 .intro-icon {
-  width: 29px;
-  height: 29px;
+  width: 18px;
+  height: 18px;
   color: var(--green-dark);
   font-size: 14px;
-  background: #ddf2ea;
-  border-radius: 8px;
 }
 
 .intro-card strong {
@@ -902,12 +899,10 @@ kbd {
 }
 
 .group-heading-icon {
-  width: 27px;
-  height: 27px;
-  color: var(--green-dark);
+  width: 18px;
+  height: 18px;
+  color: #888883;
   font-size: 14px;
-  background: var(--green-soft);
-  border-radius: 7px;
 }
 
 .group-heading h2 {
@@ -1202,12 +1197,6 @@ kbd {
 
 .footer-version {
   color: #c0c0ba;
-}
-
-@keyframes status-pulse {
-  50% {
-    opacity: 0.35;
-  }
 }
 
 @media (max-width: 1080px) {

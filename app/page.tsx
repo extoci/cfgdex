@@ -444,7 +444,7 @@ export default function Home() {
         <section className="content-area">
           <div className="content-header">
             <div className="eyebrow">
-              <span className="eyebrow-line" /> CODEX CONFIGURATION
+              <span className="eyebrow-line" /> Codex configuration
             </div>
             <div className="title-row">
               <div>
