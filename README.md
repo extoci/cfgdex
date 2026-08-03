@@ -18,6 +18,8 @@ cfgdex starts a local server at the clean Portless URL:
 https://cfgdex.localhost
 ```
 
+the browser opens automatically when the route is ready. set `CFGDEX_NO_OPEN=1` if you want to keep it terminal-only.
+
 it uses [portless](https://portless.sh/) for the named local URL, stays quiet, and does not invoke sudo or modify `/etc/hosts`. `.localhost` names resolve locally in modern browsers. Portless must already be running on its standard HTTPS port:
 
 ```sh
@@ -52,6 +54,7 @@ cfgdex only exports the values you changed. nested keys with placeholder ids are
 cfgdex is mostly a calm editor over the official Codex configuration surface:
 
 - the catalog lives in `app/config-options.ts`
+- the catalog is parsed from the Codex JSON Schema, fetched at startup with a bundled fallback
 - the Vite entrypoint lives in `src/main.tsx`
 - the UI lives in `app/page.tsx`
 - changes stay in browser storage until you export them
@@ -79,8 +82,9 @@ bun run typecheck
 bun run lint
 bun run format:check
 bun run test
+bun run schema:sync
 ```
 
-cfgdex is a plain Vite + React app. Oxlint handles linting and Oxfmt handles formatting; there is no Next, Vinext, Cloudflare, Sites, or framework server in the stack.
+cfgdex is a plain Vite + React app. Oxlint handles linting and Oxfmt handles formatting; there is no Next, Vinext, Cloudflare, Sites, or framework server in the stack. `bun run schema:sync` refreshes the checked-in fallback from the upstream schema.
 
 the current reference is [here](https://learn.chatgpt.com/docs/config-file/config-reference).

@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  sectionCounts,
-  settingOptions,
+  CONFIG_SCHEMA_URL,
+  parseConfigSchema,
+  sectionFor,
+  sections,
+  settingOptions as bundledOptions,
   type SettingKind,
   type SettingOption,
   type SettingValue,
@@ -9,57 +12,47 @@ import {
 
 const STORAGE_KEY = "cfgdex-values-v1";
 
-const sections = [
-  { id: "model", label: "Model & behavior", icon: "✦" },
-  { id: "safety", label: "Approvals & sandbox", icon: "◈" },
-  { id: "shell", label: "Shell & workspace", icon: "⌘" },
-  { id: "tools", label: "Tools & integrations", icon: "⊙" },
-  { id: "agents", label: "Agents", icon: "◎" },
-  { id: "features", label: "Features", icon: "⌁" },
-  { id: "providers", label: "Model providers", icon: "◌" },
-  { id: "tui", label: "TUI", icon: "▦" },
-  { id: "telemetry", label: "Telemetry & auth", icon: "◍" },
-  { id: "advanced", label: "Advanced", icon: "⚙" },
-];
+const emptyValueFor = (option: SettingOption): SettingValue =>
+  option.defaultValue ?? (option.type === "toggle" ? false : "");
 
-const defaultValues: Record<string, SettingValue> = Object.fromEntries(
-  settingOptions.map((option) => [
-    option.key,
-    option.defaultValue ?? (option.type === "toggle" ? false : option.type === "number" ? "" : ""),
-  ]),
-);
+const defaultsFor = (options: SettingOption[]) =>
+  Object.fromEntries(options.map((option) => [option.key, emptyValueFor(option)]));
 
-function readStoredValues() {
-  if (typeof window === "undefined") return defaultValues;
+const readStoredValues = (options: SettingOption[]) => {
+  const defaults = defaultsFor(options);
+  if (typeof window === "undefined") return defaults;
+
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored)
-      return { ...defaultValues, ...(JSON.parse(stored) as Record<string, SettingValue>) };
+    return stored
+      ? { ...defaults, ...(JSON.parse(stored) as Record<string, SettingValue>) }
+      : defaults;
   } catch {
-    // Local storage is a convenience; a malformed saved draft should not block the UI.
+    return defaults;
   }
-  return defaultValues;
-}
+};
 
-function valueFor(option: SettingOption, values: Record<string, SettingValue>) {
-  return (
-    values[option.key] ??
-    option.defaultValue ??
-    (option.type === "toggle" ? false : option.type === "number" ? "" : "")
-  );
-}
+const valueFor = (option: SettingOption, values: Record<string, SettingValue>) =>
+  values[option.key] ?? emptyValueFor(option);
 
-function formatValue(value: SettingValue, kind: SettingKind) {
-  if (kind === "toggle") return value ? "Enabled" : "Disabled";
+const formatValue = (value: SettingValue, kind: SettingKind) => {
+  if (kind === "toggle") return value ? "On" : "Off";
   if (value === "" || value === undefined) return "Not set";
   return String(value);
-}
+};
 
-function tomlValue(value: SettingValue, kind: SettingKind) {
+const tomlValue = (value: SettingValue, kind: SettingKind) => {
   if (kind === "code") return String(value || "").trim();
-  if (typeof value === "boolean" || typeof value === "number") return String(value);
+  if (kind === "number") return String(value);
+  if (typeof value === "boolean") return String(value);
   return JSON.stringify(value);
-}
+};
+
+const countsFor = (options: SettingOption[]) =>
+  options.reduce<Record<string, number>>((counts, option) => {
+    counts[option.section] = (counts[option.section] ?? 0) + 1;
+    return counts;
+  }, {});
 
 function SettingControl({
   option,
@@ -81,6 +74,7 @@ function SettingControl({
         aria-label={`${option.label}: ${formatValue(value, option.type)}`}
         onClick={() => onChange(!checked)}
       >
+        <span className="switch-track" />
         <span className="switch-knob" />
       </button>
     );
@@ -95,7 +89,7 @@ function SettingControl({
           aria-label={option.label}
           onChange={(event) => onChange(event.target.value)}
         >
-          {!option.defaultValue && <option value="">Not set</option>}
+          <option value="">Not set</option>
           {option.options?.map((item) => (
             <option key={item} value={item}>
               {item.replaceAll("_", " ")}
@@ -127,9 +121,7 @@ function SettingControl({
       value={String(value)}
       placeholder={option.placeholder}
       aria-label={option.label}
-      onChange={(event) =>
-        onChange(option.type === "number" ? event.target.value : event.target.value)
-      }
+      onChange={(event) => onChange(event.target.value)}
     />
   );
 }
@@ -147,19 +139,53 @@ function SettingRow({
 }) {
   return (
     <div className={`setting-row ${changed ? "is-changed" : ""} ${option.risk ? "is-risk" : ""}`}>
-      <div className="setting-copy">
-        <div className="setting-title-line">
+      <div className="setting-info">
+        <div className="setting-heading">
           <span className="setting-label">{option.label}</span>
-          {changed && <span className="changed-dot" aria-label="Unsaved change" />}
-          {option.risk && <span className="risk-label">sensitive</span>}
+          {changed && <span className="changed-dot" aria-label="Changed" />}
+          {option.risk && <span className="risk-label">Sensitive</span>}
         </div>
         <code className="setting-key">{option.key}</code>
         <p>{option.description}</p>
       </div>
-      <div className="setting-editor">
+      <div className={`setting-editor setting-editor-${option.type}`}>
         <SettingControl option={option} value={value} onChange={onChange} />
-        <span className="type-hint">{option.type === "toggle" ? "boolean" : option.type}</span>
+        <span className="type-hint">{formatValue(value, option.type)}</span>
       </div>
+    </div>
+  );
+}
+
+function SchemaStatus({
+  status,
+  error,
+  onRefresh,
+}: {
+  status: "loading" | "live" | "bundled";
+  error: string;
+  onRefresh: () => void;
+}) {
+  const label =
+    status === "loading"
+      ? "Checking schema"
+      : status === "live"
+        ? "Live schema"
+        : "Bundled snapshot";
+  return (
+    <div className="schema-status">
+      <div className="schema-status-heading">
+        <span className={`status-dot status-${status}`} />
+        <span>{label}</span>
+        <button
+          type="button"
+          className="icon-button"
+          onClick={onRefresh}
+          aria-label="Refresh schema"
+        >
+          ↻
+        </button>
+      </div>
+      <p>{error || "Schema metadata is used to build this editor."}</p>
     </div>
   );
 }
@@ -168,25 +194,81 @@ export default function Home() {
   const [activeSection, setActiveSection] = useState("model");
   const [search, setSearch] = useState("");
   const [showChanged, setShowChanged] = useState(false);
-  const [values, setValues] = useState<Record<string, SettingValue>>(readStoredValues);
-  const [baseline, setBaseline] = useState<Record<string, SettingValue>>(readStoredValues);
+  const [options, setOptions] = useState(bundledOptions);
+  const [values, setValues] = useState<Record<string, SettingValue>>(() =>
+    readStoredValues(bundledOptions),
+  );
+  const [baseline, setBaseline] = useState<Record<string, SettingValue>>(() =>
+    readStoredValues(bundledOptions),
+  );
   const [savedMessage, setSavedMessage] = useState("Saved locally");
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [schemaStatus, setSchemaStatus] = useState<"loading" | "live" | "bundled">("bundled");
+  const [schemaError, setSchemaError] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const sectionCounts = useMemo(() => countsFor(options), [options]);
+
+  const loadLiveSchema = useCallback(async () => {
+    setSchemaStatus("loading");
+    setSchemaError("");
+
+    try {
+      const response = await fetch(CONFIG_SCHEMA_URL, { headers: { accept: "application/json" } });
+      if (!response.ok) throw new Error(`Schema request returned ${response.status}`);
+      const nextOptions = parseConfigSchema(await response.json());
+      if (!nextOptions.length) throw new Error("The schema did not contain any settings");
+      setOptions(nextOptions);
+      setSchemaStatus("live");
+    } catch (error) {
+      setSchemaStatus("bundled");
+      setSchemaError(
+        error instanceof Error
+          ? `${error.message}. Using the bundled snapshot.`
+          : "Using the bundled snapshot.",
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLiveSchema();
+  }, [loadLiveSchema]);
+
+  useEffect(() => {
+    const nextDefaults = defaultsFor(options);
+    setValues((current) => ({ ...nextDefaults, ...current }));
+    setBaseline((current) => ({ ...nextDefaults, ...current }));
+  }, [options]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+      if (event.key === "Escape" && document.activeElement === searchRef.current) {
+        setSearch("");
+        searchRef.current?.blur();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const changedKeys = useMemo(
     () =>
       new Set(
-        settingOptions
+        options
           .filter((option) => values[option.key] !== baseline[option.key])
           .map((option) => option.key),
       ),
-    [baseline, values],
+    [baseline, options, values],
   );
 
   const visibleOptions = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return settingOptions.filter((option) => {
-      const inSection = activeSection === "all" || option.section === activeSection;
+    return options.filter((option) => {
+      const inSection =
+        Boolean(query) || activeSection === "all" || option.section === activeSection;
       const matchesQuery =
         !query ||
         option.key.toLowerCase().includes(query) ||
@@ -195,9 +277,23 @@ export default function Home() {
       const matchesChanged = !showChanged || changedKeys.has(option.key);
       return inSection && matchesQuery && matchesChanged;
     });
-  }, [activeSection, changedKeys, search, showChanged]);
+  }, [activeSection, changedKeys, options, search, showChanged]);
+
+  const groups = useMemo(() => {
+    const grouped = new Map<string, SettingOption[]>();
+    for (const option of visibleOptions)
+      grouped.set(option.section, [...(grouped.get(option.section) ?? []), option]);
+    return sections
+      .map((section) => ({ section, options: grouped.get(section.id) ?? [] }))
+      .filter((group) => group.options.length > 0);
+  }, [visibleOptions]);
 
   const changedCount = changedKeys.size;
+  const activeLabel = search
+    ? "Search results"
+    : activeSection === "all"
+      ? "All settings"
+      : sectionFor(activeSection).label;
 
   const updateValue = (key: string, value: SettingValue) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -216,9 +312,11 @@ export default function Home() {
   };
 
   const exportToml = () => {
-    const lines = settingOptions
+    const lines = options
       .filter((option) => changedKeys.has(option.key) && !option.key.includes("<"))
-      .map((option) => `${option.key} = ${tomlValue(valueFor(option, values), option.type)}`);
+      .map((option) => ({ option, value: tomlValue(valueFor(option, values), option.type) }))
+      .filter(({ value }) => value.length > 0)
+      .map(({ option, value }) => `${option.key} = ${value}`);
     const output = [
       "# Exported by cfgdex",
       "# Review nested tables and placeholder ids before using this file.",
@@ -237,25 +335,24 @@ export default function Home() {
     setActiveSection(section);
     setSearch("");
     setShowChanged(false);
-    setMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const activeLabel =
-    activeSection === "all"
-      ? "All settings"
-      : (sections.find((section) => section.id === activeSection)?.label ?? "Settings");
+  const clearFilters = () => {
+    setSearch("");
+    setShowChanged(false);
+  };
 
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">
+        <a className="brand-lockup" href="#top" aria-label="cfgdex home">
+          <span className="brand-mark" aria-hidden="true">
             <span />
-          </div>
+          </span>
           <span className="brand-name">cfgdex</span>
           <span className="local-pill">local</span>
-        </div>
+        </a>
         <div className="topbar-context">
           <span className="context-slash">/</span>
           <span>Configuration</span>
@@ -265,8 +362,16 @@ export default function Home() {
             <span className="save-state-dot" />
             {savedMessage}
           </span>
+          <button
+            type="button"
+            className="button button-quiet"
+            onClick={resetChanges}
+            disabled={!changedCount}
+          >
+            Discard
+          </button>
           <button type="button" className="button button-quiet" onClick={exportToml}>
-            <span className="button-icon">↓</span> Export TOML
+            Export
           </button>
           <button
             type="button"
@@ -274,77 +379,64 @@ export default function Home() {
             onClick={saveChanges}
             disabled={!changedCount}
           >
-            Save changes
+            Save changes{changedCount > 0 && <span className="button-count">{changedCount}</span>}
           </button>
         </div>
-        <button
-          type="button"
-          className="mobile-menu-button"
-          onClick={() => setMobileNavOpen((open) => !open)}
-          aria-label="Toggle navigation"
-          aria-expanded={mobileNavOpen}
-        >
-          <span />
-          <span />
-        </button>
       </header>
 
-      <div className="app-layout">
-        <aside className={`sidebar ${mobileNavOpen ? "is-open" : ""}`}>
+      <div className="app-layout" id="top">
+        <aside className="sidebar">
           <div className="sidebar-scroll">
-            <button type="button" className="file-card" onClick={() => chooseSection("all")}>
+            <div className="file-card">
               <span className="file-icon">⌁</span>
               <span className="file-card-copy">
                 <strong>config.toml</strong>
                 <small>~/.codex/config.toml</small>
               </span>
-              <span className="file-card-chevron">›</span>
-            </button>
+              <span className="file-card-status">local</span>
+            </div>
 
             <div className="nav-heading-row">
-              <span>Settings</span>
-              <span className="nav-count">{settingOptions.length}</span>
+              <span>Configuration</span>
+              <span className="nav-count">{options.length}</span>
             </div>
             <nav className="side-nav" aria-label="Configuration sections">
               <button
                 type="button"
-                className={`nav-item ${activeSection === "all" ? "is-active" : ""}`}
+                className={`nav-item ${activeSection === "all" && !search ? "is-active" : ""}`}
                 onClick={() => chooseSection("all")}
               >
                 <span className="nav-glyph">◫</span>
                 <span>All settings</span>
-                <span className="nav-item-count">{settingOptions.length}</span>
+                <span className="nav-item-count">{options.length}</span>
               </button>
               {sections.map((section) => (
                 <button
                   type="button"
                   key={section.id}
-                  className={`nav-item ${activeSection === section.id ? "is-active" : ""}`}
+                  className={`nav-item ${activeSection === section.id && !search ? "is-active" : ""}`}
                   onClick={() => chooseSection(section.id)}
                 >
                   <span className="nav-glyph">{section.icon}</span>
                   <span>{section.label}</span>
-                  <span className="nav-item-count">{sectionCounts[section.id]}</span>
+                  <span className="nav-item-count">{sectionCounts[section.id] ?? 0}</span>
                 </button>
               ))}
             </nav>
           </div>
           <div className="sidebar-footer">
-            <div className="workspace-card">
-              <span className="workspace-avatar">⌂</span>
-              <div>
-                <strong>Local workspace</strong>
-                <span>Changes stay on this machine</span>
-              </div>
-              <span className="online-dot" />
-            </div>
+            <SchemaStatus
+              status={schemaStatus}
+              error={schemaError}
+              onRefresh={() => void loadLiveSchema()}
+            />
             <a
               href="https://learn.chatgpt.com/docs/config-file/config-reference"
               target="_blank"
               rel="noreferrer"
               className="docs-link"
             >
-              <span>?</span> Read the config reference <span className="external-arrow">↗</span>
+              <span>?</span> Config schema <span className="external-arrow">↗</span>
             </a>
           </div>
         </aside>
@@ -356,45 +448,46 @@ export default function Home() {
             </div>
             <div className="title-row">
               <div>
-                <h1>Your config, in one place.</h1>
+                <h1>Make your config make sense.</h1>
                 <p>
-                  Understand every option, make a change, and keep your Codex setup easy to reason
-                  about.
+                  Search the reference, adjust what matters, and export a clean config when you are
+                  ready.
                 </p>
               </div>
               <div className="catalog-stat">
-                <span className="catalog-number">{settingOptions.length}</span>
-                <span>documented settings</span>
+                <span className="catalog-number">{options.length}</span>
+                <span>schema-backed settings</span>
               </div>
             </div>
-            <div className="toolbar">
-              <label className="search-box">
-                <span className="search-icon">⌕</span>
-                <span className="sr-only">Search settings</span>
-                <input
-                  type="search"
-                  value={search}
-                  placeholder="Search settings, keys, or descriptions"
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                <kbd>⌘ K</kbd>
-              </label>
-              <div className="view-actions">
-                <button
-                  type="button"
-                  className={`filter-button ${showChanged ? "is-active" : ""}`}
-                  onClick={() => setShowChanged((visible) => !visible)}
-                >
-                  <span className="filter-icon">◒</span>
-                  Changed only
-                  {changedCount > 0 && <span className="filter-count">{changedCount}</span>}
+          </div>
+
+          <div className="toolbar">
+            <label className="search-box">
+              <span className="search-icon">⌕</span>
+              <span className="sr-only">Search settings</span>
+              <input
+                ref={searchRef}
+                type="search"
+                value={search}
+                placeholder="Search settings, keys, or descriptions"
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <kbd>⌘ K</kbd>
+            </label>
+            <div className="view-actions">
+              <button
+                type="button"
+                className={`filter-button ${showChanged ? "is-active" : ""}`}
+                onClick={() => setShowChanged((visible) => !visible)}
+              >
+                <span className="filter-icon">◒</span> Changed only{" "}
+                {changedCount > 0 && <span className="filter-count">{changedCount}</span>}
+              </button>
+              {changedCount > 0 && (
+                <button type="button" className="reset-button" onClick={resetChanges}>
+                  Discard edits
                 </button>
-                {changedCount > 0 && (
-                  <button type="button" className="reset-button" onClick={resetChanges}>
-                    Revert
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
@@ -405,8 +498,29 @@ export default function Home() {
               <strong>{activeLabel}</strong>
             </div>
             <div className="meta-note">
-              <span className="meta-check">✓</span> Synced with the current Codex reference
+              <span className="meta-check">✓</span>
+              {schemaStatus === "live"
+                ? "Schema fetched from Codex"
+                : "Using bundled schema snapshot"}
             </div>
+          </div>
+
+          <div className="quick-stats" aria-label="Configuration summary">
+            <div>
+              <strong>{visibleOptions.length}</strong>
+              <span>{search || showChanged ? "matching" : "in view"}</span>
+            </div>
+            <div>
+              <strong>{changedCount}</strong>
+              <span>changed</span>
+            </div>
+            <div>
+              <strong>{sections.length}</strong>
+              <span>sections</span>
+            </div>
+            <a href={CONFIG_SCHEMA_URL} target="_blank" rel="noreferrer">
+              View source <span>↗</span>
+            </a>
           </div>
 
           {activeSection === "all" && !search && !showChanged && (
@@ -415,8 +529,8 @@ export default function Home() {
               <div>
                 <strong>Start with the settings that shape your day-to-day.</strong>
                 <p>
-                  Use the sections on the left for a focused view, or search the full reference
-                  above. Empty fields stay out of your exported file.
+                  Use the sections for a focused view, or search the full schema above. Empty fields
+                  stay out of your export.
                 </p>
               </div>
               <button type="button" className="intro-link" onClick={() => chooseSection("model")}>
@@ -432,33 +546,40 @@ export default function Home() {
                 : `${visibleOptions.length} settings in view`}
             </span>
             <span className="results-rule" />
-            <span className="results-help">Click any control to edit</span>
+            <span className="results-help">Changes are saved locally</span>
           </div>
 
-          <div className="settings-list">
-            {visibleOptions.length > 0 ? (
-              visibleOptions.map((option) => (
-                <SettingRow
-                  key={option.key}
-                  option={option}
-                  value={valueFor(option, values)}
-                  changed={changedKeys.has(option.key)}
-                  onChange={(value) => updateValue(option.key, value)}
-                />
+          <div className="settings-groups">
+            {groups.length ? (
+              groups.map(({ section, options: groupOptions }) => (
+                <section className="settings-group" key={section.id}>
+                  <div className="group-heading">
+                    <div className="group-heading-icon">{section.icon}</div>
+                    <div>
+                      <h2>{section.label}</h2>
+                      <p>{section.description}</p>
+                    </div>
+                    <span className="group-count">{groupOptions.length}</span>
+                  </div>
+                  <div className="settings-panel">
+                    {groupOptions.map((option) => (
+                      <SettingRow
+                        key={option.key}
+                        option={option}
+                        value={valueFor(option, values)}
+                        changed={changedKeys.has(option.key)}
+                        onChange={(value) => updateValue(option.key, value)}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))
             ) : (
               <div className="empty-state">
                 <div className="empty-symbol">⌕</div>
                 <strong>No settings found</strong>
                 <p>Try a broader search, or clear the changed-only filter.</p>
-                <button
-                  type="button"
-                  className="button button-quiet"
-                  onClick={() => {
-                    setSearch("");
-                    setShowChanged(false);
-                  }}
-                >
+                <button type="button" className="button button-quiet" onClick={clearFilters}>
                   Clear filters
                 </button>
               </div>
@@ -467,9 +588,9 @@ export default function Home() {
 
           <footer className="content-footer">
             <span>
-              cfgdex <span className="footer-version">v0.1 prototype</span>
+              cfgdex <span className="footer-version">local-first</span>
             </span>
-            <span>Local-first · no account required</span>
+            <span>Schema-driven · no account required</span>
           </footer>
         </section>
       </div>

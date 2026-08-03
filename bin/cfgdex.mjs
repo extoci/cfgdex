@@ -70,6 +70,18 @@ const waitForUrl = async (url, options, attempts = 100, shouldStop = () => false
   return false;
 };
 
+const openBrowser = (url) => {
+  const command =
+    process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
+  const commandArgs = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  const browser = spawn(command, commandArgs, {
+    detached: true,
+    stdio: "ignore",
+  });
+  browser.once("error", () => {});
+  browser.unref();
+};
+
 let proxyPort;
 try {
   proxyPort = parsePort("CFGDEX_PROXY_PORT", 443);
@@ -140,6 +152,7 @@ child.once("exit", async (code, signal) => {
 
 if (await waitForUrl(proxyUrl, { requirePortless: true }, 150, () => childExited)) {
   console.log(`cfgdex running at ${proxyUrl}`);
+  if (process.env.CFGDEX_NO_OPEN !== "1") openBrowser(proxyUrl);
 } else {
   if (!childExited) {
     console.error("cfgdex: Portless could not route to the local app");

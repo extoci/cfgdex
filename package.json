@@ -1,6 +1,6 @@
 {
   "name": "cfgdex",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A calm settings manager for Codex config.toml",
   "keywords": [
     "cli",
@@ -27,6 +27,7 @@
     "bin",
     "public",
     "src",
+    "scripts",
     "index.html",
     "tsconfig.json",
     "vite.config.ts",
@@ -43,7 +44,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt --write .",
-    "format:check": "oxfmt --check ."
+    "format:check": "oxfmt --check .",
+    "schema:sync": "bun scripts/sync-config-schema.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.0.2",

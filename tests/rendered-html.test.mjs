@@ -12,16 +12,20 @@ test("builds the cfgdex Vite entrypoint", async () => {
 });
 
 test("ships the configuration manager and local CLI metadata", async () => {
-  const [page, options, packageJson] = await Promise.all([
+  const [page, options, schema, packageJson] = await Promise.all([
     readFile(new URL("app/page.tsx", templateRoot), "utf8"),
     readFile(new URL("app/config-options.ts", templateRoot), "utf8"),
+    readFile(new URL("src/config-schema.json", templateRoot), "utf8"),
     readFile(new URL("package.json", templateRoot), "utf8"),
   ]);
 
-  assert.match(page, /Your config, in one place/);
-  assert.match(page, /documented settings/);
-  assert.match(page, /Model & behavior/);
-  assert.match(options, /model_reasoning_effort/);
+  assert.match(page, /Make your config make sense/);
+  assert.match(page, /schema-backed settings/);
+  assert.match(options, /CONFIG_SCHEMA_URL/);
+  assert.match(options, /parseConfigSchema/);
+  assert.match(options, /Model & behavior/);
+  assert.match(schema, /"definitions"/);
+  assert.match(schema, /"model_reasoning_effort"/);
   assert.match(page, /local-first/i);
   assert.match(packageJson, /"cfgdex":\s*"bin\/cfgdex\.mjs"/);
   assert.match(packageJson, /"vite":\s*"8\.0\.13"/);
@@ -29,5 +33,6 @@ test("ships the configuration manager and local CLI metadata", async () => {
   assert.match(packageJson, /"typescript":\s*"7\.0\.2"/);
   assert.match(packageJson, /"oxlint":\s*"1\.76\.0"/);
   assert.match(packageJson, /"oxfmt":\s*"0\.61\.0"/);
+  assert.match(packageJson, /"schema:sync":\s*"bun scripts\/sync-config-schema\.mjs"/);
   assert.doesNotMatch(packageJson, /vinext|next|wrangler|cloudflare|eslint/);
 });
