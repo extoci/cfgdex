@@ -3,7 +3,6 @@
 import { spawn } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
-import net from "node:net";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -28,17 +27,6 @@ const parsePort = (name, fallback) => {
   }
   return port;
 };
-
-const findFreePort = () =>
-  new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      const port = typeof address === "object" && address ? address.port : undefined;
-      server.close((error) => (error ? reject(error) : resolve(port)));
-    });
-  });
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -72,8 +60,9 @@ const requestStatus = (url, { requirePortless = false, requireSuccess = true } =
     request.end();
   });
 
-const waitForUrl = async (url, options, attempts = 100) => {
+const waitForUrl = async (url, options, attempts = 100, shouldStop = () => false) => {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (shouldStop()) return false;
     if ((await requestStatus(url, options)).ok) return true;
     await wait(100);
   }
@@ -81,10 +70,8 @@ const waitForUrl = async (url, options, attempts = 100) => {
 };
 
 let proxyPort;
-let appPort;
 try {
   proxyPort = parsePort("CFGDEX_PROXY_PORT", 443);
-  appPort = parsePort("CFGDEX_PORT", await findFreePort());
 } catch (error) {
   console.error(`cfgdex: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
@@ -94,7 +81,6 @@ const proxyTls = process.env.CFGDEX_PROXY_TLS !== "0";
 const proxyProtocol = proxyTls ? "https" : "http";
 const defaultProxyPort = proxyTls ? 443 : 80;
 const proxyUrl = `${proxyProtocol}://cfgdex.localhost${proxyPort === defaultProxyPort ? "" : `:${proxyPort}`}/`;
-const appUrl = `http://127.0.0.1:${appPort}/`;
 
 if (!(await waitForUrl(proxyUrl, { requirePortless: true, requireSuccess: false }, 3))) {
   console.error(`cfgdex: Portless is not running at ${proxyUrl.replace(/\/$/, "")}`);
@@ -104,7 +90,6 @@ if (!(await waitForUrl(proxyUrl, { requirePortless: true, requireSuccess: false 
 
 const env = {
   ...process.env,
-  PORTLESS_APP_PORT: String(appPort),
   PORTLESS_HTTPS: proxyTls ? "1" : "0",
   PORTLESS_PORT: String(proxyPort),
   PORTLESS_SYNC_HOSTS: "0",
@@ -113,7 +98,7 @@ const env = {
 
 const child = spawn(
   process.execPath,
-  [portlessBin, "cfgdex", "--app-port", String(appPort), "node", "bin/dev-named.mjs", ...args],
+  [portlessBin, "cfgdex", "--force", "node", "bin/dev-named.mjs", ...args],
   {
     cwd: packageRoot,
     env,
@@ -152,12 +137,11 @@ child.once("exit", async (code, signal) => {
   process.exit(signal ? 128 : code ?? 0);
 });
 
-if (!(await waitForUrl(appUrl))) {
-  console.error("cfgdex: the local app did not start");
-  forwardSignal("SIGTERM");
-} else if (await waitForUrl(proxyUrl, { requirePortless: true }, 50)) {
+if (await waitForUrl(proxyUrl, { requirePortless: true }, 150, () => childExited)) {
   console.log(`cfgdex running at ${proxyUrl}`);
 } else {
-  console.error("cfgdex: Portless could not route to the local app");
-  forwardSignal("SIGTERM");
+  if (!childExited) {
+    console.error("cfgdex: Portless could not route to the local app");
+    forwardSignal("SIGTERM");
+  }
 }

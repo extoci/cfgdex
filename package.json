@@ -1,6 +1,6 @@
 {
   "name": "cfgdex",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A calm settings manager for Codex config.toml",
   "license": "MIT",
   "repository": {
