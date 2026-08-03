@@ -10,26 +10,66 @@ import {
   type SettingValue,
 } from "./config-options";
 
-const STORAGE_KEY = "cfgdex-values-v1";
-
 const emptyValueFor = (option: SettingOption): SettingValue =>
   option.defaultValue ?? (option.type === "toggle" ? false : "");
 
 const defaultsFor = (options: SettingOption[]) =>
   Object.fromEntries(options.map((option) => [option.key, emptyValueFor(option)]));
 
-const readStoredValues = (options: SettingOption[]) => {
-  const defaults = defaultsFor(options);
-  if (typeof window === "undefined") return defaults;
+type ConfigSnapshot = {
+  path: string;
+  exists: boolean;
+  content: string;
+  config: Record<string, unknown>;
+  backupPath?: string | null;
+};
 
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    return stored
-      ? { ...defaults, ...(JSON.parse(stored) as Record<string, SettingValue>) }
-      : defaults;
-  } catch {
-    return defaults;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const configValueAt = (config: Record<string, unknown>, key: string) => {
+  let current: unknown = config;
+  for (const part of key.split(".")) {
+    if (!isRecord(current)) return undefined;
+    current = current[part];
   }
+  return current;
+};
+
+const tomlKey = (key: string) => (/^[A-Za-z0-9_-]+$/.test(key) ? key : JSON.stringify(key));
+
+const tomlLiteral = (value: unknown): string => {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return `[${value.map((item) => tomlLiteral(item)).join(", ")}]`;
+  if (isRecord(value)) {
+    return `{ ${Object.entries(value)
+      .map(([key, item]) => `${tomlKey(key)} = ${tomlLiteral(item)}`)
+      .join(", ")} }`;
+  }
+  return JSON.stringify(String(value));
+};
+
+const valuesFromConfig = (config: Record<string, unknown>, options: SettingOption[]) => {
+  const values = defaultsFor(options);
+
+  for (const option of options) {
+    const actual = configValueAt(config, option.key);
+    if (actual === undefined || actual === null) continue;
+
+    if (option.type === "code") {
+      values[option.key] = tomlLiteral(actual);
+    } else if (option.type === "toggle" && typeof actual === "boolean") {
+      values[option.key] = actual;
+    } else if (option.type === "number" && typeof actual === "number") {
+      values[option.key] = actual;
+    } else if (option.type === "select" || option.type === "text") {
+      values[option.key] = String(actual);
+    }
+  }
+
+  return values;
 };
 
 const valueFor = (option: SettingOption, values: Record<string, SettingValue>) =>
@@ -160,6 +200,33 @@ function SchemaStatus({
   );
 }
 
+function ConfigStatus({
+  status,
+  error,
+}: {
+  status: "loading" | "ready" | "missing" | "error";
+  error: string;
+}) {
+  const label =
+    status === "loading"
+      ? "Reading config.toml"
+      : status === "ready"
+        ? "Connected to config.toml"
+        : status === "missing"
+          ? "Config will be created on save"
+          : "Config file unavailable";
+
+  return (
+    <div className={`config-status config-status-${status}`}>
+      <div className="config-status-heading">
+        <span className="status-dot" />
+        <span>{label}</span>
+      </div>
+      {error && <p>{error}</p>}
+    </div>
+  );
+}
+
 export default function Home() {
   const [activeSection, setActiveSection] = useState("model");
   const [search, setSearch] = useState("");
@@ -167,12 +234,19 @@ export default function Home() {
   const [options, setOptions] = useState(bundledOptions);
   const [selectedKey, setSelectedKey] = useState(bundledOptions[0]?.key ?? "");
   const [values, setValues] = useState<Record<string, SettingValue>>(() =>
-    readStoredValues(bundledOptions),
+    defaultsFor(bundledOptions),
   );
   const [baseline, setBaseline] = useState<Record<string, SettingValue>>(() =>
-    readStoredValues(bundledOptions),
+    defaultsFor(bundledOptions),
   );
-  const [savedMessage, setSavedMessage] = useState("Saved locally");
+  const [configSnapshot, setConfigSnapshot] = useState<ConfigSnapshot | null>(null);
+  const [configPath, setConfigPath] = useState("~/.codex/config.toml");
+  const [configStatus, setConfigStatus] = useState<"loading" | "ready" | "missing" | "error">(
+    "loading",
+  );
+  const [configError, setConfigError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState("Reading config.toml…");
   const [schemaStatus, setSchemaStatus] = useState<"loading" | "live" | "bundled">("bundled");
   const [schemaError, setSchemaError] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -204,11 +278,48 @@ export default function Home() {
     void loadLiveSchema();
   }, [loadLiveSchema]);
 
+  const loadConfig = useCallback(async () => {
+    setConfigStatus("loading");
+    setConfigError("");
+
+    try {
+      const response = await fetch("/api/config", { headers: { accept: "application/json" } });
+      const payload = (await response.json()) as Partial<ConfigSnapshot> & { error?: string };
+      if (!response.ok)
+        throw new Error(payload.error || `Config request returned ${response.status}`);
+      if (typeof payload.path !== "string" || !isRecord(payload.config)) {
+        throw new Error("cfgdex received an invalid config response");
+      }
+
+      const snapshot: ConfigSnapshot = {
+        path: payload.path,
+        exists: payload.exists === true,
+        content: typeof payload.content === "string" ? payload.content : "",
+        config: payload.config,
+        backupPath: payload.backupPath,
+      };
+      setConfigSnapshot(snapshot);
+      setConfigPath(snapshot.path);
+      setConfigStatus(snapshot.exists ? "ready" : "missing");
+      setSavedMessage(snapshot.exists ? "Ready to save" : "Config will be created on save");
+    } catch (error) {
+      setConfigStatus("error");
+      setConfigError(error instanceof Error ? error.message : "Could not read config.toml");
+      setSavedMessage("Could not read config.toml");
+    }
+  }, []);
+
   useEffect(() => {
-    const nextDefaults = defaultsFor(options);
-    setValues((current) => ({ ...nextDefaults, ...current }));
-    setBaseline((current) => ({ ...nextDefaults, ...current }));
-  }, [options]);
+    void loadConfig();
+  }, [loadConfig]);
+
+  useEffect(() => {
+    const nextValues = configSnapshot
+      ? valuesFromConfig(configSnapshot.config, options)
+      : defaultsFor(options);
+    setValues(nextValues);
+    setBaseline(nextValues);
+  }, [configSnapshot, options]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -280,10 +391,51 @@ export default function Home() {
     updateValue(selectedOption.key, baseline[selectedOption.key] ?? emptyValueFor(selectedOption));
   };
 
-  const saveChanges = () => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
-    setBaseline(values);
-    setSavedMessage("Saved locally");
+  const saveChanges = async () => {
+    const changes = options
+      .filter((option) => changedKeys.has(option.key) && !option.key.includes("<"))
+      .map((option) => ({
+        key: option.key,
+        type: option.type,
+        value: valueFor(option, values),
+      }));
+    if (saving || !changes.length) return;
+
+    setSaving(true);
+    setSavedMessage("Saving to disk…");
+
+    try {
+      const response = await fetch("/api/config", {
+        method: "PUT",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ changes }),
+      });
+      const payload = (await response.json()) as Partial<ConfigSnapshot> & { error?: string };
+      if (!response.ok)
+        throw new Error(payload.error || `Save request returned ${response.status}`);
+      if (typeof payload.path !== "string" || !isRecord(payload.config)) {
+        throw new Error("cfgdex received an invalid save response");
+      }
+
+      const snapshot: ConfigSnapshot = {
+        path: payload.path,
+        exists: true,
+        content: typeof payload.content === "string" ? payload.content : "",
+        config: payload.config,
+        backupPath: payload.backupPath,
+      };
+      setConfigSnapshot(snapshot);
+      setConfigPath(snapshot.path);
+      setConfigStatus("ready");
+      setBaseline(values);
+      setSavedMessage(snapshot.backupPath ? "Saved to disk · backup created" : "Saved to disk");
+    } catch (error) {
+      setSavedMessage("Save failed");
+      setConfigError(error instanceof Error ? error.message : "Could not save config.toml");
+      setConfigStatus("error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const exportToml = () => {
@@ -351,10 +503,11 @@ export default function Home() {
           <button
             type="button"
             className="button button-dark"
-            onClick={saveChanges}
-            disabled={!changedCount}
+            onClick={() => void saveChanges()}
+            disabled={!changedCount || saving}
           >
-            Save changes{changedCount > 0 && <span className="button-count">{changedCount}</span>}
+            {saving ? "Saving…" : "Save changes"}
+            {!saving && changedCount > 0 && <span className="button-count">{changedCount}</span>}
           </button>
         </div>
       </header>
@@ -365,7 +518,7 @@ export default function Home() {
             <span className="file-icon">⌁</span>
             <div>
               <strong>config.toml</strong>
-              <span>~/.codex/config.toml</span>
+              <span title={configPath}>{configPath}</span>
             </div>
           </div>
           <div className="sidebar-heading">
@@ -396,6 +549,7 @@ export default function Home() {
             ))}
           </nav>
           <div className="sidebar-bottom">
+            <ConfigStatus status={configStatus} error={configError} />
             <SchemaStatus
               status={schemaStatus}
               error={schemaError}

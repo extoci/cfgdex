@@ -353,7 +353,8 @@ textarea:focus-visible {
   color: var(--ink-faint);
   font-family: var(--font-mono);
   font-size: 12px;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .file-card-status {
@@ -454,6 +455,41 @@ textarea:focus-visible {
   gap: 6px;
   color: var(--ink-faint);
   font-size: 12px;
+}
+
+.config-status {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.config-status-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.config-status-ready .status-dot {
+  background: var(--green);
+}
+
+.config-status-loading .status-dot,
+.config-status-missing .status-dot {
+  background: #c4a25b;
+}
+
+.config-status-error .status-dot {
+  background: #b55252;
+}
+
+.config-status p {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .schema-status-heading {

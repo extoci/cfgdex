@@ -2,7 +2,7 @@
 
 cfgdex is a local UI for Codex configuration.
 
-it turns the giant `config.toml` reference into something you can search, understand, and change without hand-editing TOML. it runs locally, opens on a named `.localhost` URL, and keeps drafts in your browser.
+it turns the giant `config.toml` reference into something you can search, understand, and change without hand-editing TOML. it runs locally, opens on a named `.localhost` URL, and saves directly to your Codex config.
 
 ## installation
 
@@ -34,7 +34,7 @@ bunx cfgdex
 - grouped views for model behavior, approvals, shell, tools, agents, features, providers, TUI, telemetry, and advanced permissions
 - toggles for booleans, selects for enums, and TOML-friendly editors for arrays, tables, maps, and paths
 - changed-only view, revert, and export to `config.toml`
-- browser-local drafts through `localStorage`
+- automatic read/write of `~/.codex/config.toml` with a `.bak` backup on save
 
 ## usage
 
@@ -47,7 +47,13 @@ mcp_servers.<id>.command
 features.network_proxy.domains
 ```
 
-cfgdex only exports the values you changed. nested keys with placeholder ids are left out of the export so you can fill in the real table names yourself.
+cfgdex reads `~/.codex/config.toml` when it starts and only writes the settings you changed. existing keys that are not shown in the UI are preserved. nested keys with placeholder ids are left out of saves and exports so you can fill in the real table names yourself.
+
+set `CODEX_HOME` if your Codex config lives somewhere else:
+
+```sh
+CODEX_HOME=/path/to/codex bunx cfgdex
+```
 
 ## how it works
 
@@ -57,14 +63,15 @@ cfgdex is mostly a calm editor over the official Codex configuration surface:
 - the catalog is parsed from the Codex JSON Schema, fetched at startup with a bundled fallback
 - the Vite entrypoint lives in `src/main.tsx`
 - the UI lives in `app/page.tsx`
-- changes stay in browser storage until you export them
+- the embedded Vite middleware reads and writes `CODEX_HOME/config.toml` locally
+- every save replaces the file atomically and keeps the previous version at `config.toml.bak`
 - `bunx cfgdex` starts the local app through Vite and the Portless launcher
 
 it does not need an account, a hosted database, or a cfgdex server.
 
 ## trust and privacy
 
-cfgdex is local-first. it does not send your config to a cfgdex service, and it does not require a login. browser drafts stay in the local browser profile. exporting a file is an explicit action.
+cfgdex is local-first. it does not send your config to a cfgdex service, and it does not require a login. saving is an explicit action, and writes happen through the local process that started cfgdex.
 
 the underlying Codex options can control shell access, networking, approvals, telemetry, and credentials. read the descriptions before changing security-sensitive settings.
 

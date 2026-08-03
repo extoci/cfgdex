@@ -27,6 +27,12 @@ test("ships the configuration manager and local CLI metadata", async () => {
   assert.match(schema, /"definitions"/);
   assert.match(schema, /"model_reasoning_effort"/);
   assert.match(page, /local-first/i);
+  assert.match(page, /\/api\/config/);
+  assert.match(page, /Saved to disk/);
+  assert.match(page, /configPath/);
+  assert.doesNotMatch(page, /localStorage/);
+  assert.match(packageJson, /"smol-toml":\s*"1\.7\.1"/);
+  assert.match(packageJson, /"server"/);
   assert.match(packageJson, /"cfgdex":\s*"bin\/cfgdex\.mjs"/);
   assert.match(packageJson, /"vite":\s*"8\.0\.13"/);
   assert.match(packageJson, /"packageManager":\s*"bun@1\.3\.14"/);
