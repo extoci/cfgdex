@@ -108,7 +108,7 @@ function SettingControl({
         value={String(value)}
         placeholder={option.placeholder}
         aria-label={option.label}
-        rows={2}
+        rows={4}
         onChange={(event) => onChange(event.target.value)}
       />
     );
@@ -123,36 +123,6 @@ function SettingControl({
       aria-label={option.label}
       onChange={(event) => onChange(event.target.value)}
     />
-  );
-}
-
-function SettingRow({
-  option,
-  value,
-  changed,
-  onChange,
-}: {
-  option: SettingOption;
-  value: SettingValue;
-  changed: boolean;
-  onChange: (value: SettingValue) => void;
-}) {
-  return (
-    <div className={`setting-row ${changed ? "is-changed" : ""} ${option.risk ? "is-risk" : ""}`}>
-      <div className="setting-info">
-        <div className="setting-heading">
-          <span className="setting-label">{option.label}</span>
-          {changed && <span className="changed-dot" aria-label="Changed" />}
-          {option.risk && <span className="risk-label">Sensitive</span>}
-        </div>
-        <code className="setting-key">{option.key}</code>
-        <p>{option.description}</p>
-      </div>
-      <div className={`setting-editor setting-editor-${option.type}`}>
-        <SettingControl option={option} value={value} onChange={onChange} />
-        <span className="type-hint">{formatValue(value, option.type)}</span>
-      </div>
-    </div>
   );
 }
 
@@ -185,7 +155,7 @@ function SchemaStatus({
           ↻
         </button>
       </div>
-      <p>{error || "Schema metadata is used to build this editor."}</p>
+      <p>{error || "This editor is generated from Codex’s JSON Schema."}</p>
     </div>
   );
 }
@@ -195,6 +165,7 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [showChanged, setShowChanged] = useState(false);
   const [options, setOptions] = useState(bundledOptions);
+  const [selectedKey, setSelectedKey] = useState(bundledOptions[0]?.key ?? "");
   const [values, setValues] = useState<Record<string, SettingValue>>(() =>
     readStoredValues(bundledOptions),
   );
@@ -279,15 +250,14 @@ export default function Home() {
     });
   }, [activeSection, changedKeys, options, search, showChanged]);
 
-  const groups = useMemo(() => {
-    const grouped = new Map<string, SettingOption[]>();
-    for (const option of visibleOptions)
-      grouped.set(option.section, [...(grouped.get(option.section) ?? []), option]);
-    return sections
-      .map((section) => ({ section, options: grouped.get(section.id) ?? [] }))
-      .filter((group) => group.options.length > 0);
-  }, [visibleOptions]);
+  useEffect(() => {
+    if (visibleOptions.length && !visibleOptions.some((option) => option.key === selectedKey)) {
+      setSelectedKey(visibleOptions[0].key);
+    }
+  }, [selectedKey, visibleOptions]);
 
+  const selectedOption = options.find((option) => option.key === selectedKey) ?? visibleOptions[0];
+  const selectedValue = selectedOption ? valueFor(selectedOption, values) : "";
   const changedCount = changedKeys.size;
   const activeLabel = search
     ? "Search results"
@@ -300,15 +270,20 @@ export default function Home() {
     setSavedMessage("Unsaved changes");
   };
 
+  const resetChanges = () => {
+    setValues(baseline);
+    setSavedMessage("Reverted changes");
+  };
+
+  const resetSelected = () => {
+    if (!selectedOption) return;
+    updateValue(selectedOption.key, baseline[selectedOption.key] ?? emptyValueFor(selectedOption));
+  };
+
   const saveChanges = () => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
     setBaseline(values);
     setSavedMessage("Saved locally");
-  };
-
-  const resetChanges = () => {
-    setValues(baseline);
-    setSavedMessage("Reverted changes");
   };
 
   const exportToml = () => {
@@ -335,7 +310,6 @@ export default function Home() {
     setActiveSection(section);
     setSearch("");
     setShowChanged(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const clearFilters = () => {
@@ -353,9 +327,10 @@ export default function Home() {
           <span className="brand-name">cfgdex</span>
           <span className="local-pill">local</span>
         </a>
-        <div className="topbar-context">
-          <span className="context-slash">/</span>
-          <span>Configuration</span>
+        <div className="topbar-breadcrumb">
+          <span>config.toml</span>
+          <span>/</span>
+          <strong>{activeLabel}</strong>
         </div>
         <div className="topbar-actions">
           <span className={`save-state ${changedCount ? "has-changes" : ""}`}>
@@ -386,45 +361,42 @@ export default function Home() {
 
       <div className="app-layout" id="top">
         <aside className="sidebar">
-          <div className="sidebar-scroll">
-            <div className="file-card">
-              <span className="file-icon">⌁</span>
-              <span className="file-card-copy">
-                <strong>config.toml</strong>
-                <small>~/.codex/config.toml</small>
-              </span>
-              <span className="file-card-status">local</span>
+          <div className="file-context">
+            <span className="file-icon">⌁</span>
+            <div>
+              <strong>config.toml</strong>
+              <span>~/.codex/config.toml</span>
             </div>
-
-            <div className="nav-heading-row">
-              <span>Configuration</span>
-              <span className="nav-count">{options.length}</span>
-            </div>
-            <nav className="side-nav" aria-label="Configuration sections">
+            <span className="file-card-status">local</span>
+          </div>
+          <div className="sidebar-heading">
+            <span>Sections</span>
+            <span>{options.length}</span>
+          </div>
+          <nav className="side-nav" aria-label="Configuration sections">
+            <button
+              type="button"
+              className={`nav-item ${activeSection === "all" && !search ? "is-active" : ""}`}
+              onClick={() => chooseSection("all")}
+            >
+              <span className="nav-glyph">◫</span>
+              <span>All settings</span>
+              <span className="nav-item-count">{options.length}</span>
+            </button>
+            {sections.map((section) => (
               <button
                 type="button"
-                className={`nav-item ${activeSection === "all" && !search ? "is-active" : ""}`}
-                onClick={() => chooseSection("all")}
+                key={section.id}
+                className={`nav-item ${activeSection === section.id && !search ? "is-active" : ""}`}
+                onClick={() => chooseSection(section.id)}
               >
-                <span className="nav-glyph">◫</span>
-                <span>All settings</span>
-                <span className="nav-item-count">{options.length}</span>
+                <span className="nav-glyph">{section.icon}</span>
+                <span>{section.label}</span>
+                <span className="nav-item-count">{sectionCounts[section.id] ?? 0}</span>
               </button>
-              {sections.map((section) => (
-                <button
-                  type="button"
-                  key={section.id}
-                  className={`nav-item ${activeSection === section.id && !search ? "is-active" : ""}`}
-                  onClick={() => chooseSection(section.id)}
-                >
-                  <span className="nav-glyph">{section.icon}</span>
-                  <span>{section.label}</span>
-                  <span className="nav-item-count">{sectionCounts[section.id] ?? 0}</span>
-                </button>
-              ))}
-            </nav>
-          </div>
-          <div className="sidebar-footer">
+            ))}
+          </nav>
+          <div className="sidebar-bottom">
             <SchemaStatus
               status={schemaStatus}
               error={schemaError}
@@ -436,160 +408,179 @@ export default function Home() {
               rel="noreferrer"
               className="docs-link"
             >
-              <span>?</span> Config schema <span className="external-arrow">↗</span>
+              Read config reference <span>↗</span>
             </a>
           </div>
         </aside>
 
-        <section className="content-area">
-          <div className="content-header">
-            <div className="eyebrow">
-              <span className="eyebrow-line" /> Codex configuration
-            </div>
-            <div className="title-row">
-              <div>
-                <h1>Make your config make sense.</h1>
-                <p>
-                  Search the reference, adjust what matters, and export a clean config when you are
-                  ready.
-                </p>
-              </div>
-              <div className="catalog-stat">
-                <span className="catalog-number">{options.length}</span>
-                <span>schema-backed settings</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="toolbar">
-            <label className="search-box">
-              <span className="search-icon">⌕</span>
-              <span className="sr-only">Search settings</span>
-              <input
-                ref={searchRef}
-                type="search"
-                value={search}
-                placeholder="Search settings, keys, or descriptions"
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <kbd>⌘ K</kbd>
-            </label>
-            <div className="view-actions">
-              <button
-                type="button"
-                className={`filter-button ${showChanged ? "is-active" : ""}`}
-                onClick={() => setShowChanged((visible) => !visible)}
-              >
-                <span className="filter-icon">◒</span> Changed only{" "}
-                {changedCount > 0 && <span className="filter-count">{changedCount}</span>}
-              </button>
-              {changedCount > 0 && (
-                <button type="button" className="reset-button" onClick={resetChanges}>
-                  Discard edits
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="content-meta">
-            <div className="meta-breadcrumb">
-              <span>config.toml</span>
-              <span className="breadcrumb-arrow">›</span>
-              <strong>{activeLabel}</strong>
-            </div>
-            <div className="meta-note">
-              <span className="meta-check">✓</span>
-              {schemaStatus === "live"
-                ? "Schema fetched from Codex"
-                : "Using bundled schema snapshot"}
-            </div>
-          </div>
-
-          <div className="quick-stats" aria-label="Configuration summary">
+        <section className="workspace">
+          <div className="workspace-heading">
             <div>
-              <strong>{visibleOptions.length}</strong>
-              <span>{search || showChanged ? "matching" : "in view"}</span>
+              <p className="eyebrow">Local workspace</p>
+              <h1>Configuration</h1>
+              <p className="workspace-description">
+                Edit the Codex schema without losing the shape of your config.
+              </p>
             </div>
-            <div>
+            <div className="workspace-summary">
+              <strong>{options.length}</strong>
+              <span>schema-backed settings</span>
+              <span className="summary-divider" />
               <strong>{changedCount}</strong>
               <span>changed</span>
             </div>
-            <div>
-              <strong>{sections.length}</strong>
-              <span>sections</span>
-            </div>
-            <a href={CONFIG_SCHEMA_URL} target="_blank" rel="noreferrer">
-              View source <span>↗</span>
-            </a>
           </div>
 
-          {activeSection === "all" && !search && !showChanged && (
-            <div className="intro-card">
-              <div className="intro-icon">✦</div>
-              <div>
-                <strong>Start with the settings that shape your day-to-day.</strong>
-                <p>
-                  Use the sections for a focused view, or search the full schema above. Empty fields
-                  stay out of your export.
-                </p>
+          <div className="workbench">
+            <section className="list-pane" aria-label="Settings list">
+              <div className="list-toolbar">
+                <label className="search-box">
+                  <span className="search-icon">⌕</span>
+                  <span className="sr-only">Search settings</span>
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    value={search}
+                    placeholder="Search settings"
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                  <kbd>⌘ K</kbd>
+                </label>
+                <div className="list-toolbar-meta">
+                  <span>
+                    {visibleOptions.length} {search || showChanged ? "matches" : "settings"}
+                  </span>
+                  <button
+                    type="button"
+                    className={`filter-button ${showChanged ? "is-active" : ""}`}
+                    onClick={() => setShowChanged((visible) => !visible)}
+                  >
+                    Changed only
+                    {changedCount > 0 && <span className="filter-count">{changedCount}</span>}
+                  </button>
+                </div>
               </div>
-              <button type="button" className="intro-link" onClick={() => chooseSection("model")}>
-                Open model settings <span>→</span>
-              </button>
-            </div>
-          )}
-
-          <div className="results-bar">
-            <span>
-              {search || showChanged
-                ? `${visibleOptions.length} matching settings`
-                : `${visibleOptions.length} settings in view`}
-            </span>
-            <span className="results-rule" />
-            <span className="results-help">Changes are saved locally</span>
-          </div>
-
-          <div className="settings-groups">
-            {groups.length ? (
-              groups.map(({ section, options: groupOptions }) => (
-                <section className="settings-group" key={section.id}>
-                  <div className="group-heading">
-                    <div className="group-heading-icon">{section.icon}</div>
-                    <div>
-                      <h2>{section.label}</h2>
-                      <p>{section.description}</p>
-                    </div>
-                    <span className="group-count">{groupOptions.length}</span>
-                  </div>
-                  <div className="settings-panel">
-                    {groupOptions.map((option) => (
-                      <SettingRow
+              <div className="list-heading">
+                <span>{search ? "Search results" : activeLabel}</span>
+                <span>Value</span>
+              </div>
+              <div className="setting-list">
+                {visibleOptions.length ? (
+                  visibleOptions.map((option) => {
+                    const value = valueFor(option, values);
+                    const changed = changedKeys.has(option.key);
+                    return (
+                      <button
+                        type="button"
                         key={option.key}
-                        option={option}
-                        value={valueFor(option, values)}
-                        changed={changedKeys.has(option.key)}
-                        onChange={(value) => updateValue(option.key, value)}
-                      />
-                    ))}
+                        className={`setting-list-item ${selectedOption?.key === option.key ? "is-selected" : ""} ${changed ? "is-changed" : ""}`}
+                        onClick={() => setSelectedKey(option.key)}
+                        aria-current={selectedOption?.key === option.key ? "true" : undefined}
+                      >
+                        <span className="list-item-copy">
+                          <span className="list-item-title">
+                            {option.label}
+                            {changed && <i aria-label="Changed" />}
+                          </span>
+                          <code>{option.key}</code>
+                        </span>
+                        <span className={`list-item-value value-${option.type}`}>
+                          {formatValue(value, option.type)}
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="empty-state">
+                    <strong>No settings found</strong>
+                    <p>Try a broader search, or clear the filter.</p>
+                    <button type="button" className="button button-quiet" onClick={clearFilters}>
+                      Clear filters
+                    </button>
                   </div>
-                </section>
-              ))
-            ) : (
-              <div className="empty-state">
-                <div className="empty-symbol">⌕</div>
-                <strong>No settings found</strong>
-                <p>Try a broader search, or clear the changed-only filter.</p>
-                <button type="button" className="button button-quiet" onClick={clearFilters}>
-                  Clear filters
-                </button>
+                )}
               </div>
-            )}
-          </div>
+            </section>
 
+            <aside className="detail-pane" aria-label="Setting editor">
+              {selectedOption ? (
+                <>
+                  <div className="detail-header">
+                    <div className="detail-section">
+                      <span>{sectionFor(selectedOption.section).label}</span>
+                      {changedKeys.has(selectedOption.key) && (
+                        <span className="detail-changed">Changed</span>
+                      )}
+                    </div>
+                    <h2>{selectedOption.label}</h2>
+                    <code className="detail-key">{selectedOption.key}</code>
+                  </div>
+                  <p className="detail-description">{selectedOption.description}</p>
+                  {selectedOption.risk && (
+                    <div className="risk-note">
+                      <span>!</span>
+                      <p>
+                        This setting can affect security or access. Review the value before saving.
+                      </p>
+                    </div>
+                  )}
+                  <div className="detail-field">
+                    <div className="field-heading">
+                      <label htmlFor={selectedOption.key}>Value</label>
+                      <span>{selectedOption.type}</span>
+                    </div>
+                    <div id={selectedOption.key}>
+                      <SettingControl
+                        option={selectedOption}
+                        value={selectedValue}
+                        onChange={(value) => updateValue(selectedOption.key, value)}
+                      />
+                    </div>
+                    <p className="field-help">
+                      {selectedOption.defaultValue !== undefined
+                        ? `Default: ${String(selectedOption.defaultValue)}`
+                        : "No default. Leave empty to omit it from the export."}
+                    </p>
+                  </div>
+                  <dl className="detail-meta">
+                    <div>
+                      <dt>Section</dt>
+                      <dd>{sectionFor(selectedOption.section).label}</dd>
+                    </div>
+                    <div>
+                      <dt>Type</dt>
+                      <dd>{selectedOption.type}</dd>
+                    </div>
+                    <div>
+                      <dt>State</dt>
+                      <dd>{changedKeys.has(selectedOption.key) ? "Edited" : "Unchanged"}</dd>
+                    </div>
+                  </dl>
+                  <div className="detail-actions">
+                    <button
+                      type="button"
+                      className="button button-quiet"
+                      onClick={resetSelected}
+                      disabled={!changedKeys.has(selectedOption.key)}
+                    >
+                      Reset setting
+                    </button>
+                    <a href={CONFIG_SCHEMA_URL} target="_blank" rel="noreferrer">
+                      Open schema ↗
+                    </a>
+                  </div>
+                </>
+              ) : (
+                <div className="empty-detail">
+                  <span>◌</span>
+                  <strong>Select a setting</strong>
+                  <p>Choose an option from the list to edit it.</p>
+                </div>
+              )}
+            </aside>
+          </div>
           <footer className="content-footer">
-            <span>
-              cfgdex <span className="footer-version">local-first</span>
-            </span>
+            <span>cfgdex · local-first</span>
             <span>Schema-driven · no account required</span>
           </footer>
         </section>

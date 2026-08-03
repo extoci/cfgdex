@@ -19,7 +19,7 @@ test("ships the configuration manager and local CLI metadata", async () => {
     readFile(new URL("package.json", templateRoot), "utf8"),
   ]);
 
-  assert.match(page, /Make your config make sense/);
+  assert.match(page, /master-detail|Setting editor/);
   assert.match(page, /schema-backed settings/);
   assert.match(options, /CONFIG_SCHEMA_URL/);
   assert.match(options, /parseConfigSchema/);
