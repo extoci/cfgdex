@@ -4,7 +4,8 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
-const vinextBin = `${packageRoot}/node_modules/.bin/vinext`;
+const vinextModule = fileURLToPath(await import.meta.resolve("vinext"));
+const vinextBin = vinextModule.replace(/dist[\\/]index\.js$/, "dist/cli.js");
 const port = process.env.PORT || "3000";
 
 const child = spawn(vinextBin, ["dev", "--host", "127.0.0.1", "--port", port], {

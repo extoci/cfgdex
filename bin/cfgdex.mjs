@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const args = process.argv.slice(2);
-const portlessBin = `${packageRoot}/node_modules/.bin/portless`;
+const portlessModule = fileURLToPath(await import.meta.resolve("portless"));
+const portlessBin = portlessModule.replace(/dist[\\/]index\.js$/, "dist/cli.js");
 
 if (args.includes("--help") || args.includes("-h")) {
   console.log("cfgdex - a local Codex config manager");
