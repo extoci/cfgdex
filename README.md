@@ -52,9 +52,10 @@ cfgdex only exports the values you changed. nested keys with placeholder ids are
 cfgdex is mostly a calm editor over the official Codex configuration surface:
 
 - the catalog lives in `app/config-options.ts`
+- the Vite entrypoint lives in `src/main.tsx`
 - the UI lives in `app/page.tsx`
 - changes stay in browser storage until you export them
-- `bunx cfgdex` starts the local app through a tiny Portless launcher
+- `bunx cfgdex` starts the local app through Vite and the Portless launcher
 
 it does not need an account, a hosted database, or a cfgdex server.
 
@@ -68,14 +69,18 @@ the underlying Codex options can control shell access, networking, approvals, te
 
 requirements:
 
-- Node.js `>=22.13.0`
-- npm or Bun
+- Bun `>=1.3.14`
+- TypeScript 7 for typechecking
 
 ```sh
-npm install
-npm run dev:named
-npm run lint
-npm test
+bun install
+bun run dev:named
+bun run typecheck
+bun run lint
+bun run format:check
+bun run test
 ```
+
+cfgdex is a plain Vite + React app. Oxlint handles linting and Oxfmt handles formatting; there is no Next, Vinext, Cloudflare, Sites, or framework server in the stack.
 
 the current reference is [here](https://learn.chatgpt.com/docs/config-file/config-reference).

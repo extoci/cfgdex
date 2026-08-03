@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { spawn } from "node:child_process";
 import http from "node:http";
@@ -49,7 +49,8 @@ const requestStatus = (url, { requirePortless = false, requireSuccess = true } =
         const portless = response.headers["x-portless"] === "1";
         response.resume();
         resolve({
-          ok: (!requireSuccess || response.statusCode >= 200 && response.statusCode < 300) &&
+          ok:
+            (!requireSuccess || (response.statusCode >= 200 && response.statusCode < 300)) &&
             (!requirePortless || portless),
           portless,
         });
@@ -98,7 +99,7 @@ const env = {
 
 const child = spawn(
   process.execPath,
-  [portlessBin, "cfgdex", "--force", "node", "bin/dev-named.mjs", ...args],
+  [portlessBin, "cfgdex", "--force", process.execPath, "bin/dev-named.mjs", ...args],
   {
     cwd: packageRoot,
     env,
@@ -134,7 +135,7 @@ child.once("exit", async (code, signal) => {
     const detail = stderr.trim().split("\n").filter(Boolean).slice(-1)[0];
     console.error(`cfgdex: ${detail || `the server exited with code ${code}`}`);
   }
-  process.exit(signal ? 128 : code ?? 0);
+  process.exit(signal ? 128 : (code ?? 0));
 });
 
 if (await waitForUrl(proxyUrl, { requirePortless: true }, 150, () => childExited)) {

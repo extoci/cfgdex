@@ -1,51 +1,33 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const templateRoot = new URL("../", import.meta.url);
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-}
-
-test("server-renders the cfgdex configuration manager", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
-  const html = await response.text();
+test("builds the cfgdex Vite entrypoint", async () => {
+  const html = await readFile(new URL("dist/index.html", templateRoot), "utf8");
   assert.match(html, /<title>cfgdex — Codex configuration, in one place<\/title>/i);
-  assert.match(html, /Your config, in one place/);
-  assert.match(html, /documented settings/);
-  assert.match(html, /Model &amp; behavior/);
-  assert.match(html, /model_reasoning_effort/);
-  assert.match(html, /local-first/i);
-  assert.doesNotMatch(html, /Your site is taking shape/);
-  assert.doesNotMatch(html, /codex-preview/);
+  assert.match(html, /<div id="root"><\/div>/);
+  assert.match(html, /<script type="module"[^>]+src="\/.+\.js"/);
 });
 
-test("the prototype keeps local app state and CLI metadata", async () => {
-  const packageJson = await (await import("node:fs/promises")).readFile(
-    new URL("package.json", templateRoot),
-    "utf8",
-  );
-  assert.match(packageJson, /"name":\s*"cfgdex"/);
+test("ships the configuration manager and local CLI metadata", async () => {
+  const [page, options, packageJson] = await Promise.all([
+    readFile(new URL("app/page.tsx", templateRoot), "utf8"),
+    readFile(new URL("app/config-options.ts", templateRoot), "utf8"),
+    readFile(new URL("package.json", templateRoot), "utf8"),
+  ]);
+
+  assert.match(page, /Your config, in one place/);
+  assert.match(page, /documented settings/);
+  assert.match(page, /Model & behavior/);
+  assert.match(options, /model_reasoning_effort/);
+  assert.match(page, /local-first/i);
   assert.match(packageJson, /"cfgdex":\s*"bin\/cfgdex\.mjs"/);
-  assert.match(packageJson, /portless/);
+  assert.match(packageJson, /"vite":\s*"8\.0\.13"/);
+  assert.match(packageJson, /"packageManager":\s*"bun@1\.3\.14"/);
+  assert.match(packageJson, /"typescript":\s*"7\.0\.2"/);
+  assert.match(packageJson, /"oxlint":\s*"1\.76\.0"/);
+  assert.match(packageJson, /"oxfmt":\s*"0\.61\.0"/);
+  assert.doesNotMatch(packageJson, /vinext|next|wrangler|cloudflare|eslint/);
 });

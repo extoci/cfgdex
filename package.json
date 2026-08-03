@@ -1,79 +1,67 @@
 {
   "name": "cfgdex",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A calm settings manager for Codex config.toml",
+  "keywords": [
+    "cli",
+    "codex",
+    "config",
+    "developer-tools",
+    "openai",
+    "toml"
+  ],
+  "homepage": "https://github.com/extoci/cfgdex#readme",
+  "bugs": {
+    "url": "https://github.com/extoci/cfgdex/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/extoci/cfgdex.git"
   },
-  "homepage": "https://github.com/extoci/cfgdex#readme",
-  "bugs": {
-    "url": "https://github.com/extoci/cfgdex/issues"
+  "bin": {
+    "cfgdex": "bin/cfgdex.mjs"
   },
-  "keywords": [
-    "codex",
-    "openai",
-    "config",
-    "toml",
-    "cli",
-    "developer-tools"
-  ],
   "files": [
     "app",
     "bin",
-    "build",
-    "db",
-    "drizzle",
     "public",
-    "worker",
-    ".openai",
-    "next.config.ts",
-    "postcss.config.mjs",
+    "src",
+    "index.html",
     "tsconfig.json",
     "vite.config.ts",
     "README.md",
     "LICENSE"
   ],
-  "bin": {
-    "cfgdex": "bin/cfgdex.mjs"
-  },
-  "engines": {
-    "node": ">=22.13.0"
-  },
+  "type": "module",
   "scripts": {
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
-    "dev:named": "node bin/cfgdex.mjs",
-    "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
-    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "dev": "vite",
+    "dev:named": "bun bin/cfgdex.mjs",
+    "build": "vite build",
+    "start": "vite preview",
+    "test": "bun run build && bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check ."
   },
   "dependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@tailwindcss/postcss": "4.2.1",
     "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
-    "drizzle-orm": "0.45.2",
-    "next": "16.2.6",
     "portless": "0.12.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "react-server-dom-webpack": "19.2.6",
-    "tailwindcss": "4.2.1",
-    "vinext": "0.0.50",
     "vite": "8.0.13"
   },
   "devDependencies": {
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "drizzle-kit": "0.31.10",
-    "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
-    "typescript": "5.9.3",
-    "wrangler": "4.92.0"
+    "oxfmt": "0.61.0",
+    "oxlint": "1.76.0",
+    "typescript": "7.0.2"
   },
-  "type": "module"
+  "engines": {
+    "bun": ">=1.3.14"
+  },
+  "packageManager": "bun@1.3.14"
 }

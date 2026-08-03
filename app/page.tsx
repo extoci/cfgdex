@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import {
   sectionCounts,
@@ -27,8 +25,7 @@ const sections = [
 const defaultValues: Record<string, SettingValue> = Object.fromEntries(
   settingOptions.map((option) => [
     option.key,
-    option.defaultValue ??
-      (option.type === "toggle" ? false : option.type === "number" ? "" : ""),
+    option.defaultValue ?? (option.type === "toggle" ? false : option.type === "number" ? "" : ""),
   ]),
 );
 
@@ -36,7 +33,8 @@ function readStoredValues() {
   if (typeof window === "undefined") return defaultValues;
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) return { ...defaultValues, ...(JSON.parse(stored) as Record<string, SettingValue>) };
+    if (stored)
+      return { ...defaultValues, ...(JSON.parse(stored) as Record<string, SettingValue>) };
   } catch {
     // Local storage is a convenience; a malformed saved draft should not block the UI.
   }
@@ -246,13 +244,15 @@ export default function Home() {
   const activeLabel =
     activeSection === "all"
       ? "All settings"
-      : sections.find((section) => section.id === activeSection)?.label ?? "Settings";
+      : (sections.find((section) => section.id === activeSection)?.label ?? "Settings");
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true"><span /></div>
+          <div className="brand-mark" aria-hidden="true">
+            <span />
+          </div>
           <span className="brand-name">cfgdex</span>
           <span className="local-pill">local</span>
         </div>
@@ -268,7 +268,12 @@ export default function Home() {
           <button type="button" className="button button-quiet" onClick={exportToml}>
             <span className="button-icon">↓</span> Export TOML
           </button>
-          <button type="button" className="button button-dark" onClick={saveChanges} disabled={!changedCount}>
+          <button
+            type="button"
+            className="button button-dark"
+            onClick={saveChanges}
+            disabled={!changedCount}
+          >
             Save changes
           </button>
         </div>
@@ -333,7 +338,12 @@ export default function Home() {
               </div>
               <span className="online-dot" />
             </div>
-            <a href="https://learn.chatgpt.com/docs/config-file/config-reference" target="_blank" rel="noreferrer" className="docs-link">
+            <a
+              href="https://learn.chatgpt.com/docs/config-file/config-reference"
+              target="_blank"
+              rel="noreferrer"
+              className="docs-link"
+            >
               <span>?</span> Read the config reference <span className="external-arrow">↗</span>
             </a>
           </div>
@@ -341,11 +351,16 @@ export default function Home() {
 
         <section className="content-area">
           <div className="content-header">
-            <div className="eyebrow"><span className="eyebrow-line" /> CODEX CONFIGURATION</div>
+            <div className="eyebrow">
+              <span className="eyebrow-line" /> CODEX CONFIGURATION
+            </div>
             <div className="title-row">
               <div>
                 <h1>Your config, in one place.</h1>
-                <p>Understand every option, make a change, and keep your Codex setup easy to reason about.</p>
+                <p>
+                  Understand every option, make a change, and keep your Codex setup easy to reason
+                  about.
+                </p>
               </div>
               <div className="catalog-stat">
                 <span className="catalog-number">{settingOptions.length}</span>
@@ -365,21 +380,33 @@ export default function Home() {
                 <kbd>⌘ K</kbd>
               </label>
               <div className="view-actions">
-                <button type="button" className={`filter-button ${showChanged ? "is-active" : ""}`} onClick={() => setShowChanged((visible) => !visible)}>
+                <button
+                  type="button"
+                  className={`filter-button ${showChanged ? "is-active" : ""}`}
+                  onClick={() => setShowChanged((visible) => !visible)}
+                >
                   <span className="filter-icon">◒</span>
                   Changed only
                   {changedCount > 0 && <span className="filter-count">{changedCount}</span>}
                 </button>
                 {changedCount > 0 && (
-                  <button type="button" className="reset-button" onClick={resetChanges}>Revert</button>
+                  <button type="button" className="reset-button" onClick={resetChanges}>
+                    Revert
+                  </button>
                 )}
               </div>
             </div>
           </div>
 
           <div className="content-meta">
-            <div className="meta-breadcrumb"><span>config.toml</span><span className="breadcrumb-arrow">›</span><strong>{activeLabel}</strong></div>
-            <div className="meta-note"><span className="meta-check">✓</span> Synced with the current Codex reference</div>
+            <div className="meta-breadcrumb">
+              <span>config.toml</span>
+              <span className="breadcrumb-arrow">›</span>
+              <strong>{activeLabel}</strong>
+            </div>
+            <div className="meta-note">
+              <span className="meta-check">✓</span> Synced with the current Codex reference
+            </div>
           </div>
 
           {activeSection === "all" && !search && !showChanged && (
@@ -387,39 +414,61 @@ export default function Home() {
               <div className="intro-icon">✦</div>
               <div>
                 <strong>Start with the settings that shape your day-to-day.</strong>
-                <p>Use the sections on the left for a focused view, or search the full reference above. Empty fields stay out of your exported file.</p>
+                <p>
+                  Use the sections on the left for a focused view, or search the full reference
+                  above. Empty fields stay out of your exported file.
+                </p>
               </div>
-              <button type="button" className="intro-link" onClick={() => chooseSection("model")}>Open model settings <span>→</span></button>
+              <button type="button" className="intro-link" onClick={() => chooseSection("model")}>
+                Open model settings <span>→</span>
+              </button>
             </div>
           )}
 
           <div className="results-bar">
-            <span>{search || showChanged ? `${visibleOptions.length} matching settings` : `${visibleOptions.length} settings in view`}</span>
+            <span>
+              {search || showChanged
+                ? `${visibleOptions.length} matching settings`
+                : `${visibleOptions.length} settings in view`}
+            </span>
             <span className="results-rule" />
             <span className="results-help">Click any control to edit</span>
           </div>
 
           <div className="settings-list">
-            {visibleOptions.length > 0 ? visibleOptions.map((option) => (
-              <SettingRow
-                key={option.key}
-                option={option}
-                value={valueFor(option, values)}
-                changed={changedKeys.has(option.key)}
-                onChange={(value) => updateValue(option.key, value)}
-              />
-            )) : (
+            {visibleOptions.length > 0 ? (
+              visibleOptions.map((option) => (
+                <SettingRow
+                  key={option.key}
+                  option={option}
+                  value={valueFor(option, values)}
+                  changed={changedKeys.has(option.key)}
+                  onChange={(value) => updateValue(option.key, value)}
+                />
+              ))
+            ) : (
               <div className="empty-state">
                 <div className="empty-symbol">⌕</div>
                 <strong>No settings found</strong>
                 <p>Try a broader search, or clear the changed-only filter.</p>
-                <button type="button" className="button button-quiet" onClick={() => { setSearch(""); setShowChanged(false); }}>Clear filters</button>
+                <button
+                  type="button"
+                  className="button button-quiet"
+                  onClick={() => {
+                    setSearch("");
+                    setShowChanged(false);
+                  }}
+                >
+                  Clear filters
+                </button>
               </div>
             )}
           </div>
 
           <footer className="content-footer">
-            <span>cfgdex <span className="footer-version">v0.1 prototype</span></span>
+            <span>
+              cfgdex <span className="footer-version">v0.1 prototype</span>
+            </span>
             <span>Local-first · no account required</span>
           </footer>
         </section>

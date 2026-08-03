@@ -1,21 +1,23 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
-const vinextModule = fileURLToPath(await import.meta.resolve("vinext"));
-const vinextBin = vinextModule.replace(/dist[\\/]index\.js$/, "dist/cli.js");
-const port = process.env.PORT || "3000";
+const viteModule = fileURLToPath(await import.meta.resolve("vite"));
+const viteBin = viteModule.replace(/dist[\\/]node[\\/]index\.js$/, "bin/vite.js");
+const port = process.env.PORT || "5173";
 
-const child = spawn(vinextBin, ["dev", "--host", "127.0.0.1", "--port", port], {
+const child = spawn(process.execPath, [viteBin, "--host", "127.0.0.1", "--port", port], {
   cwd: packageRoot,
   stdio: "inherit",
   env: { ...process.env },
 });
 
-process.on("SIGINT", () => child.kill("SIGINT"));
-process.on("SIGTERM", () => child.kill("SIGTERM"));
+const forwardSignal = (signal) => child.kill(signal);
+process.on("SIGINT", () => forwardSignal("SIGINT"));
+process.on("SIGTERM", () => forwardSignal("SIGTERM"));
+
 child.on("exit", (code, signal) => {
   if (signal) process.kill(process.pid, signal);
   process.exit(code ?? 0);
