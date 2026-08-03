@@ -367,7 +367,6 @@ export default function Home() {
               <strong>config.toml</strong>
               <span>~/.codex/config.toml</span>
             </div>
-            <span className="file-card-status">local</span>
           </div>
           <div className="sidebar-heading">
             <span>Sections</span>

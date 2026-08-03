@@ -350,11 +350,9 @@ textarea:focus-visible {
 }
 
 .file-context div span {
-  overflow: hidden;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 11px;
-  text-overflow: ellipsis;
+  font-size: 12px;
   white-space: nowrap;
 }
 
