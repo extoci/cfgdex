@@ -12,16 +12,17 @@ run it directly:
 bunx cfgdex
 ```
 
-cfgdex starts a local server at a quiet, unprivileged local port and prints the URL:
+cfgdex starts a local server at the clean Portless URL:
 
 ```text
-http://cfgdex.localhost:<port>
+https://cfgdex.localhost
 ```
 
-it uses [portless](https://portless.sh/) for the named local URL, but does not ask for sudo or modify `/etc/hosts`. `.localhost` names resolve locally in modern browsers. the port is intentional: binding the clean `http://cfgdex.localhost` or `https://cfgdex.localhost` URL requires a system-level service on port 80 or 443.
+it uses [portless](https://portless.sh/) for the named local URL, stays quiet, and does not invoke sudo or modify `/etc/hosts`. `.localhost` names resolve locally in modern browsers. Portless must already be running on its standard HTTPS port:
 
 ```sh
-npm run dev:named
+sudo portless proxy start --https
+bunx cfgdex
 ```
 
 ## what it does
