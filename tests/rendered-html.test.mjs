@@ -12,11 +12,14 @@ test("builds the cfgdex Vite entrypoint", async () => {
 });
 
 test("ships the configuration manager and local CLI metadata", async () => {
-  const [page, options, schema, packageJson] = await Promise.all([
+  const [page, options, schema, packageJson, cli, viteConfig, readme] = await Promise.all([
     readFile(new URL("app/page.tsx", templateRoot), "utf8"),
     readFile(new URL("app/config-options.ts", templateRoot), "utf8"),
     readFile(new URL("src/config-schema.json", templateRoot), "utf8"),
     readFile(new URL("package.json", templateRoot), "utf8"),
+    readFile(new URL("bin/cfgdex.mjs", templateRoot), "utf8"),
+    readFile(new URL("vite.config.ts", templateRoot), "utf8"),
+    readFile(new URL("README.md", templateRoot), "utf8"),
   ]);
 
   assert.match(page, /master-detail|Setting editor/);
@@ -41,4 +44,14 @@ test("ships the configuration manager and local CLI metadata", async () => {
   assert.match(packageJson, /"oxfmt":\s*"0\.61\.0"/);
   assert.match(packageJson, /"schema:sync":\s*"bun scripts\/sync-config-schema\.mjs"/);
   assert.doesNotMatch(packageJson, /vinext|next|wrangler|cloudflare|eslint/);
+  assert.match(cli, /rawArgs\[0\] === "client"/);
+  assert.match(cli, /CFGDEX_SERVER_IP/);
+  assert.match(cli, /diskthing\.local/);
+  assert.match(cli, /CFGDEX_BIND_HOST/);
+  assert.match(cli, /PORTLESS_LAN/);
+  assert.match(viteConfig, /CFGDEX_REMOTE_URL/);
+  assert.match(viteConfig, /target: remoteUrl/);
+  assert.match(readme, /bunx cfgdex client/);
+  assert.match(readme, /https:\/\/diskthing\.local/);
+  assert.match(packageJson, /"portless":\s*"0\.12\.0"/);
 });

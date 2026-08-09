@@ -1,6 +1,6 @@
 {
   "name": "cfgdex",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "A calm settings manager for Codex config.toml",
   "keywords": [
     "cli",
@@ -38,7 +38,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:named": "bun bin/cfgdex.mjs",
+    "dev:named": "bun bin/dev-named.mjs",
     "build": "vite build",
     "start": "vite preview",
     "test": "bun run build && bun test",
